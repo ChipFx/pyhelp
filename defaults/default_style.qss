@@ -1,0 +1,161 @@
+/*
+ * default_style.qss — Fallback Qt stylesheet for pyhelp HelpWindow.
+ *
+ * Generated from default_theme.json palette.
+ * This file is used as a static fallback only.  At runtime, HelpTheme.to_stylesheet()
+ * generates the stylesheet dynamically so that font sizes and custom colours
+ * are applied correctly.  This file is provided for tools that need a static
+ * stylesheet (e.g. Qt Designer previews).
+ */
+
+QDialog#HelpWindowRoot {
+    background-color: #0d0d1a;
+    color: #d0d0e8;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13pt;
+}
+
+QWidget#HelpToolbar {
+    background-color: #08080f;
+    border-bottom: 1px solid #2a2a50;
+}
+
+QLabel#HelpLogoLabel {
+    color: #f0c040;
+    font-size: 15pt;
+    font-weight: bold;
+    padding: 4px 8px;
+}
+
+QLabel#HelpLogoSub {
+    color: #555577;
+    font-size: 11pt;
+    padding: 0px 8px 4px 8px;
+}
+
+QPushButton#HelpCloseButton {
+    background-color: #1a1a30;
+    color: #c0c0dc;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13pt;
+    border: 1px solid #3a3a60;
+    border-bottom: 2px solid #111130;
+    border-radius: 4px;
+    padding: 4px 14px;
+    min-width: 60px;
+}
+
+QPushButton#HelpCloseButton:hover {
+    background-color: #24244a;
+    color: #e0e0f8;
+    border: 1px solid #66aaff;
+    border-bottom: 2px solid #111130;
+}
+
+QPushButton#HelpCloseButton:pressed {
+    background-color: #0e0e22;
+    border: 1px solid #2a2a50;
+    border-bottom: 1px solid #111130;
+    padding-top: 5px;
+    padding-bottom: 3px;
+}
+
+QSplitter#HelpSplitter {
+    background-color: #0d0d1a;
+}
+
+QSplitter#HelpSplitter::handle {
+    background-color: #1a1a30;
+    width: 2px;
+}
+
+QTreeWidget#HelpTree {
+    background-color: #0b0b17;
+    color: #c0c0dc;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13pt;
+    border: none;
+    border-right: 1px solid #2a2a50;
+    outline: none;
+}
+
+QTreeWidget#HelpTree::item {
+    padding: 3px 6px;
+}
+
+QTreeWidget#HelpTree::item:selected {
+    background-color: #1e1e48;
+    color: #ffffff;
+}
+
+QTreeWidget#HelpTree::item:hover:!selected {
+    background-color: #1a1a30;
+}
+
+QTextBrowser#HelpContent {
+    background-color: #10101f;
+    color: #d0d0e8;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 13pt;
+    border: none;
+    padding: 8px;
+}
+
+QStatusBar#HelpStatusBar {
+    background-color: #08080f;
+    color: #8888aa;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 11pt;
+    border-top: 1px solid #2a2a50;
+}
+
+QToolTip {
+    background-color: #16162e;
+    color: #d0d0e8;
+    border: 1px solid #2a2a50;
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 11pt;
+    padding: 4px 6px;
+}
+
+QScrollBar:vertical {
+    background-color: #0b0b17;
+    width: 10px;
+    border: none;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #2a2a50;
+    border-radius: 5px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #66aaff;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background-color: #0b0b17;
+    height: 10px;
+    border: none;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #2a2a50;
+    border-radius: 5px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #66aaff;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}

@@ -1,0 +1,5 @@
+app_name: "SampleApp"
+chapter_order:
+  - view
+  - tools
+default_topic: "view/viewmode"

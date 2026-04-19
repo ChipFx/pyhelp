@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "pyhelp"
+version = "0.1.0"
+description = "Reusable, modular help system for PyQt6 applications"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "pyhelp contributors" },
+]
+keywords = ["help", "documentation", "PyQt6", "RST", "reStructuredText"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Documentation",
+]
+dependencies = [
+    "docutils>=0.20",
+    "python-frontmatter>=1.1",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-qt",
+]
+
+[tool.setuptools.packages.find]
+# The repo root IS the pyhelp package when mounted as a submodule.
+# For editable installs (pip install -e ./pyhelp) setuptools needs the
+# parent directory as the search root and an explicit package name map.
+where = [".."]
+include = ["pyhelp*"]
+
+[tool.setuptools.package-data]
+"pyhelp" = ["defaults/*.json", "defaults/*.qss"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
