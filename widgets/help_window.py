@@ -7,9 +7,11 @@ The main help dialog.  Combines a HelpTree (left pane) with a QTextBrowser
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Union
 
 from PyQt6.QtCore import QSettings, QSize, Qt, QUrl
+from PyQt6.QtGui import QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -22,6 +24,18 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+try:
+    from PyQt6.QtSvg import QSvgRenderer
+    _SVG_AVAILABLE = True
+except ImportError:
+    _SVG_AVAILABLE = False
+
+# Absolute path to pyhelp's own assets folder.  Used as the default logo
+# source so the window works out-of-the-box without any caller configuration.
+# Callers may point assets_dir elsewhere (e.g. the host project's ./assets/)
+# to substitute their own branding — see HelpWindow.__init__.
+_PYHELP_ASSETS: Path = (Path(__file__).parent.parent / "assets").resolve()
 
 from pyhelp.parser import HelpEntry
 from pyhelp.registry import HelpRegistry
@@ -38,16 +52,23 @@ class HelpWindow(QDialog):
     its geometry between sessions via :class:`QSettings`.
 
     Args:
-        registry:  The :class:`~pyhelp.registry.HelpRegistry` providing content.
-        parent:    Optional parent widget.
-        modal:     If ``True`` the window blocks input to other application windows
-                   (``ApplicationModal``).  If ``False`` (default) it is non-blocking
-                   and should be shown with :meth:`show`.
-        theme:     Full application theme dict (must contain a ``"helpwindow"`` key)
-                   *or* the helpwindow sub-dict directly.  ``None`` uses the built-in
-                   dark theme.
-        font_size: Base font size in points (default 13).
+        registry:   The :class:`~pyhelp.registry.HelpRegistry` providing content.
+        parent:     Optional parent widget.
+        modal:      If ``True`` the window blocks input to other application windows
+                    (``ApplicationModal``).  If ``False`` (default) it is non-blocking
+                    and should be shown with :meth:`show`.
+        theme:      Full application theme dict (must contain a ``"helpwindow"`` key,
+                    and optionally a top-level ``"name"`` field for logo resolution)
+                    *or* the helpwindow sub-dict directly.  ``None`` uses the built-in
+                    dark theme.
+        font_size:  Base font size in points (default 13).
+        assets_dir: Directory containing ``branding_*.svg`` logo files.
+                    Resolved relative to the caller's working directory.
+                    When omitted, a built-in fallback badge is shown.
     """
+
+    # Height in pixels at which the branding SVG is rendered in the toolbar.
+    LOGO_HEIGHT: int = 32
 
     def __init__(
         self,
@@ -56,10 +77,18 @@ class HelpWindow(QDialog):
         modal: bool = False,
         theme: Union[dict, None] = None,
         font_size: int = 13,
+        assets_dir: Union[Path, str, None] = None,
     ) -> None:
         super().__init__(parent)
         self._registry = registry
         self._font_size = font_size
+        # Resolve assets_dir to an absolute path.  When the caller supplies a
+        # relative path (e.g. "./assets/") it resolves against the working
+        # directory of the host process — which is intentionally different from
+        # pyhelp's own assets folder (_PYHELP_ASSETS).
+        self._assets_dir: Path = (
+            Path(assets_dir).resolve() if assets_dir is not None else _PYHELP_ASSETS
+        )
         self._theme = HelpTheme(theme_dict=theme, font_size=font_size)
 
         self.setObjectName("HelpWindowRoot")
@@ -71,6 +100,7 @@ class HelpWindow(QDialog):
 
         self._build_ui()
         self._apply_stylesheet()
+        self._refresh_logo()
         self._restore_geometry()
 
         # Populate tree after UI is ready
@@ -97,8 +127,8 @@ class HelpWindow(QDialog):
         toolbar_layout.setContentsMargins(6, 4, 6, 4)
         toolbar_layout.setSpacing(6)
 
-        logo_label = QLabel(self._registry.app_name)
-        logo_label.setObjectName("HelpLogoLabel")
+        self._logo_label = QLabel(self._registry.app_name)
+        self._logo_label.setObjectName("HelpLogoLabel")
 
         spacer = QWidget()
         spacer.setSizePolicy(
@@ -110,7 +140,7 @@ class HelpWindow(QDialog):
         close_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         close_btn.clicked.connect(self.close)
 
-        toolbar_layout.addWidget(logo_label)
+        toolbar_layout.addWidget(self._logo_label)
         toolbar_layout.addWidget(spacer)
         toolbar_layout.addWidget(close_btn)
 
@@ -148,6 +178,65 @@ class HelpWindow(QDialog):
     def _apply_stylesheet(self) -> None:
         """Apply the current theme stylesheet to this dialog."""
         self.setStyleSheet(self._theme.to_stylesheet())
+
+    def _refresh_logo(self) -> None:
+        """
+        Resolve and display the branding SVG for the current theme, or render
+        the built-in text badge when no SVG is available.
+
+        Resolution is delegated to :meth:`~pyhelp.theme.HelpTheme.resolve_logo`.
+        If no matching SVG exists in the assets directory (deleted, missing, or
+        not yet created), a compact HTML badge reading "pyhelp library / by
+        ChipFX" is shown in its place, using theme colours and a one-pixel
+        accent-coloured rule as a divider.
+        """
+        svg_path = self._theme.resolve_logo(self._assets_dir)
+        if svg_path is not None:
+            pixmap = self._render_svg_pixmap(svg_path, self.LOGO_HEIGHT)
+            if pixmap is not None:
+                self._logo_label.setPixmap(pixmap)
+                self._logo_label.setText("")
+                return
+
+        # No SVG resolved (or render failed) — show the branded text badge.
+        self._logo_label.setPixmap(QPixmap())
+        self._logo_label.setTextFormat(Qt.TextFormat.RichText)
+        self._logo_label.setText(self._theme.logo_badge_html())
+
+    def _render_svg_pixmap(self, path: Path, height: int) -> Union[QPixmap, None]:
+        """
+        Render an SVG file to a :class:`QPixmap` at the requested height.
+
+        Width is computed from the SVG's intrinsic aspect ratio.  Returns
+        ``None`` if ``PyQt6.QtSvg`` is unavailable or the file cannot be
+        rendered.
+
+        Args:
+            path:   Path to the ``.svg`` file.
+            height: Desired output height in pixels.
+
+        Returns:
+            Rendered :class:`QPixmap`, or ``None`` on failure.
+        """
+        if not _SVG_AVAILABLE:
+            return None
+        try:
+            renderer = QSvgRenderer(str(path))
+            if not renderer.isValid():
+                return None
+            default_size = renderer.defaultSize()
+            if default_size.height() > 0:
+                width = int(default_size.width() * height / default_size.height())
+            else:
+                width = height * 3
+            pixmap = QPixmap(QSize(max(1, width), height))
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
+            return pixmap
+        except Exception:
+            return None
 
     def _render_entry(self, entry: HelpEntry) -> None:
         """Render *entry* into the QTextBrowser with injected theme CSS."""
@@ -202,6 +291,7 @@ class HelpWindow(QDialog):
         """
         self._theme = HelpTheme(theme_dict=theme_dict, font_size=self._font_size)
         self._apply_stylesheet()
+        self._refresh_logo()
 
     def set_font_size(self, size: int) -> None:
         """

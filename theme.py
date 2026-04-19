@@ -47,15 +47,18 @@ class HelpTheme:
         self._font_size: int = font_size
 
         if theme_dict is None:
+            self._theme_name: str = "Dark"
             self._theme: dict = copy.deepcopy(self._defaults)
         elif "helpwindow" in theme_dict:
-            # Full app theme — extract and merge with defaults
+            # Full app theme — extract name and helpwindow block, merge with defaults
+            self._theme_name = str(theme_dict.get("name", "Dark"))
             hw_block = theme_dict["helpwindow"]
             merged = copy.deepcopy(self._defaults)
             merged.update(hw_block)
             self._theme = merged
         else:
-            # Assume caller passed the helpwindow block directly
+            # Assume caller passed the helpwindow block directly — no name available
+            self._theme_name = "Dark"
             merged = copy.deepcopy(self._defaults)
             merged.update(theme_dict)
             self._theme = merged
@@ -86,6 +89,19 @@ class HelpTheme:
         return cls(theme_dict=app_theme, font_size=font_size)
 
     # ------------------------------------------------------------------
+    # Properties
+    # ------------------------------------------------------------------
+
+    @property
+    def theme_name(self) -> str:
+        """
+        The theme name as provided in the top-level ``"name"`` field of the
+        application theme dict (e.g. ``"Dark"``, ``"Light"``, ``"Print"``).
+        Defaults to ``"Dark"`` when not supplied.
+        """
+        return self._theme_name
+
+    # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
@@ -94,6 +110,26 @@ class HelpTheme:
         with self.DEFAULT_THEME_PATH.open("r", encoding="utf-8") as fh:
             full = json.load(fh)
         return full["helpwindow"]
+
+    def _bg_is_dark(self) -> bool:
+        """
+        Return ``True`` if the theme background colour has HSL lightness below 50%.
+
+        Used as the fallback criterion when no theme-named logo file exists.
+        Treats unparseable colour values as dark.
+        """
+        hex_color = self._t("bg").lstrip("#")
+        if len(hex_color) != 6:
+            return True
+        try:
+            r = int(hex_color[0:2], 16) / 255
+            g = int(hex_color[2:4], 16) / 255
+            b = int(hex_color[4:6], 16) / 255
+        except ValueError:
+            return True
+        # HSL lightness = (max_channel + min_channel) / 2
+        lightness = (max(r, g, b) + min(r, g, b)) / 2
+        return lightness < 0.5
 
     def _t(self, key: str) -> str:
         """Return theme value for *key*, falling back to empty string."""
@@ -106,6 +142,87 @@ class HelpTheme:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def resolve_logo(self, assets_dir: Union[Path, str]) -> Union[Path, None]:
+        """
+        Resolve the branding SVG path for this theme.
+
+        Resolution order:
+
+        1. ``{assets_dir}/branding_{theme_name}.svg`` — exact theme match.
+        2. ``{assets_dir}/branding_Dark.svg`` or ``branding_Light.svg`` —
+           chosen by whether the theme background colour is predominantly dark
+           (HSL lightness < 50 %).
+
+        Args:
+            assets_dir: Directory containing ``branding_*.svg`` files.
+                        Typically the host project's ``./assets/`` folder.
+
+        Returns:
+            Absolute :class:`~pathlib.Path` to the chosen SVG, or ``None`` if
+            no matching file exists in *assets_dir*.
+        """
+        assets_dir = Path(assets_dir).resolve()
+
+        # 1. Theme-specific file
+        specific = assets_dir / f"branding_{self._theme_name}.svg"
+        if specific.exists():
+            return specific
+
+        # 2. Lightness-based fallback
+        fallback_name = "branding_Dark.svg" if self._bg_is_dark() else "branding_Light.svg"
+        fallback = assets_dir / fallback_name
+        if fallback.exists():
+            return fallback
+
+        return None
+
+    def logo_badge_html(self) -> str:
+        """
+        Generate an HTML string for a compact branding badge to display in a
+        ``QLabel`` when no branding SVG file is available.
+
+        The badge renders as two lines separated by a single-pixel coloured
+        rule (the "laser line"):
+
+        ::
+
+            pyhelp library     ← logo_text colour, font_size_logo
+            ───────────────    ← 1 px rule in accent colour
+            by ChipFX          ← logo_sub colour, font_size_small
+
+        Inline styles are used throughout so the badge is self-contained and
+        is not affected by the outer Qt stylesheet.
+
+        Returns:
+            HTML string suitable for ``QLabel.setText()``.
+        """
+        t = self._t
+        fs = self._font_size
+        fs_logo = self._i("font_size_logo") or fs + 2
+        fs_small = self._i("font_size_small") or max(fs - 2, 9)
+        font = t("font_family") or "sans-serif"
+
+        line1 = (
+            f'<p style="'
+            f'margin: 1px 6px 0 6px; '
+            f'padding-bottom: 3px; '
+            f'border-bottom: 1px solid {t("accent")}; '
+            f'font-family: {font}; '
+            f'font-size: {fs_logo}pt; '
+            f'font-weight: bold; '
+            f'color: {t("logo_text")};">'
+            f'pyhelp library</p>'
+        )
+        line2 = (
+            f'<p style="'
+            f'margin: 2px 6px 1px 6px; '
+            f'font-family: {font}; '
+            f'font-size: {fs_small}pt; '
+            f'color: {t("logo_sub")};">'
+            f'by ChipFX</p>'
+        )
+        return line1 + line2
 
     def apply_font_size(self, size: int) -> None:
         """
