@@ -14,7 +14,7 @@ installed package.
 
 ```bash
 # Add pyhelp as a submodule inside your project
-git submodule add https://github.com/your-org/pyhelp.git pyhelp
+git submodule add https://github.com/ChipFx/pyhelp.git pyhelp
 git submodule update --init --recursive
 ```
 
@@ -46,7 +46,7 @@ pip install -e ./pyhelp
 ```ini
 [submodule "pyhelp"]
     path = pyhelp
-    url = https://github.com/your-org/pyhelp.git
+    url = https://github.com/ChipFx/pyhelp.git
     branch = main
 ```
 
