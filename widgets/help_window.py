@@ -342,6 +342,40 @@ class HelpWindow(QDialog):
     # Public API
     # ------------------------------------------------------------------
 
+    def reload(self) -> None:
+        """
+        Re-scan the help directory from disk and refresh the UI in place.
+
+        Calls :meth:`~pyhelp.registry.HelpRegistry.reload` on the registry,
+        rebuilds the tree, and attempts to re-display the topic that was
+        showing before the reload.  If that topic no longer exists (file was
+        deleted or ``short_name`` changed), falls back to
+        ``registry.default_topic`` or the first available entry.
+
+        Intended for use during help content development — wire it to a
+        button or keyboard shortcut in your host application to see edits
+        without reopening the window.
+        """
+        # Remember what was showing
+        current_html = self._browser.toPlainText()  # non-empty iff something loaded
+        current_items = self._tree.selectedItems()
+        current_short_name: Union[str, None] = None
+        if current_items:
+            from PyQt6.QtCore import Qt as _Qt
+            entry = current_items[0].data(0, _Qt.ItemDataRole.UserRole)
+            if entry is not None:
+                current_short_name = entry.short_name
+
+        # Reload registry and rebuild tree
+        self._registry.reload()
+        self._tree.populate()
+
+        # Re-navigate: current topic → default_topic → first entry
+        if current_short_name is not None and self._registry.find(current_short_name):
+            self.navigate_to(current_short_name)
+        else:
+            self._navigate_initial()
+
     def apply_theme(self, theme_dict: dict) -> None:
         """
         Apply a new theme live without closing the window.
