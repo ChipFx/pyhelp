@@ -1,0 +1,17 @@
+{
+  "window": {
+    "width": 900,
+    "height": 600
+  },
+  "splitter": {
+    "tree_width": 220
+  },
+  "logo": {
+    "max_h": 48,
+    "max_w": 300,
+    "set_h": 32,
+    "set_w": null,
+    "keep_aspect": true,
+    "fit_parent": true
+  }
+}

@@ -250,6 +250,10 @@ class HelpTheme:
         fs_small = self._i("font_size_small") or max(fs - 2, 9)
         fs_logo = self._i("font_size_logo") or fs + 2
         font = t("font_family") or "sans-serif"
+        # Vertical padding per side on tree items, as a fraction of font size.
+        # Expressed in pt so it scales automatically when font size changes.
+        spacing_pct = self._i("tree_item_spacing_pct") or 10
+        item_v_pad = round(fs * spacing_pct / 100, 1)
 
         return f"""
 /* ── HelpWindow root ─────────────────────────────────────────────── */
@@ -329,7 +333,7 @@ QTreeWidget#HelpTree {{
 }}
 
 QTreeWidget#HelpTree::item {{
-    padding: 3px 6px;
+    padding: {item_v_pad}pt 6px;
 }}
 
 QTreeWidget#HelpTree::item:selected {{

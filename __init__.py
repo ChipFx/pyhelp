@@ -16,6 +16,7 @@ Quickstart::
 
 from pyhelp.parser import HelpEntry, HelpParseError
 from pyhelp.registry import HelpRegistry
+from pyhelp.sizing import HelpSizing, LogoSizeSpec
 from pyhelp.theme import HelpTheme
 
 __version__ = "0.1.0"
@@ -25,6 +26,8 @@ __all__ = [
     "HelpEntry",
     "HelpTheme",
     "HelpParseError",
+    "HelpSizing",
+    "LogoSizeSpec",
     "HelpWindow",
     "HelpTree",
 ]
