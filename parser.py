@@ -14,6 +14,16 @@ from typing import Union
 import frontmatter
 from docutils.core import publish_parts
 
+# Register the rst-doc:// URI scheme with docutils so it renders links that
+# use this scheme as proper <a href="..."> elements rather than plain text.
+# Docutils validates URI schemes against a registered list; custom schemes must
+# be explicitly added before any parsing occurs.
+try:
+    import docutils.utils.urischemes as _urischemes
+    _urischemes.schemes["rst-doc"] = "pyhelp internal cross-reference"
+except Exception:
+    pass
+
 
 class HelpParseError(Exception):
     """Raised when a help file cannot be parsed due to missing fields or invalid RST."""
