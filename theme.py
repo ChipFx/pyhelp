@@ -442,11 +442,32 @@ body {{
     margin: 12px 16px;
 }}
 
-h1, h2, h3, h4, h5, h6 {{
-    color: {t("text")};
-    border-bottom: 1px solid {t("border")};
+h1, h2 {{
+    color: {t("heading_color")};
     padding-bottom: 4px;
+    margin-top: 1.4em;
+}}
+
+h1 {{
+    font-size: {fs + 4}pt;
+    border-bottom: 2px solid {t("border")};
+}}
+
+h2 {{
+    font-size: {fs + 2}pt;
+    border-bottom: 1px solid {t("border")};
+}}
+
+h3 {{
+    color: {t("text")};
+    font-size: {fs + 1}pt;
     margin-top: 1.2em;
+}}
+
+h4, h5, h6 {{
+    color: {t("text_dim")};
+    font-size: {fs}pt;
+    margin-top: 1.0em;
 }}
 
 a {{

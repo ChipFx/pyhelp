@@ -111,21 +111,64 @@ class HelpTree(QTreeWidget):
 
     def select_path(self, path: str) -> None:
         """
-        Select an entry by its path string (e.g. ``"view/viewmode"``).
+        Select an entry by its path string, with graceful degradation for
+        paths that have more segments than the current tree depth supports.
 
-        The path is split on ``/``; the first component is the chapter key and
-        the second is the entry ``short_name``.  If the path has only one
-        component it is treated as a ``short_name`` search across all chapters.
+        The ``#anchor`` fragment (used for sub-section scrolling) is stripped
+        before matching.  Segments are tried from most-specific (last) to
+        least-specific (first) as ``short_name`` values.  If no segment
+        matches a known entry, the first entry of the chapter named by the
+        first segment is selected instead.
 
         Args:
-            path: Path string such as ``"view/viewmode"``.
+            path: Path string such as ``"view/viewmode"``,
+                  ``"menu_bar/file_menu/import"``, or
+                  ``"view/viewmode#section-id"``.
         """
-        parts = path.split("/", 1)
-        if len(parts) == 2:
-            short_name = parts[1]
-        else:
-            short_name = parts[0]
-        self.select_entry(short_name)
+        # Strip anchor fragment
+        if "#" in path:
+            path = path.split("#", 1)[0]
+
+        segments = [s for s in path.split("/") if s]
+        if not segments:
+            return
+
+        # Try each segment as a short_name, from most-specific (last) to first
+        for short_name in reversed(segments):
+            root = self.invisibleRootItem()
+            for i in range(root.childCount()):
+                chapter_item = root.child(i)
+                for j in range(chapter_item.childCount()):
+                    entry_item = chapter_item.child(j)
+                    entry: HelpEntry | None = entry_item.data(
+                        0, Qt.ItemDataRole.UserRole
+                    )
+                    if entry is not None and entry.short_name == short_name:
+                        chapter_item.setExpanded(True)
+                        self.blockSignals(True)
+                        self.setCurrentItem(entry_item)
+                        self.blockSignals(False)
+                        self.scrollToItem(entry_item)
+                        return
+
+        # No segment matched as a short_name — expand and select the first
+        # entry of the chapter named by the first segment.
+        chapter_key = segments[0]
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            chapter_item = root.child(i)
+            if chapter_item.childCount() == 0:
+                continue
+            first_entry: HelpEntry | None = chapter_item.child(0).data(
+                0, Qt.ItemDataRole.UserRole
+            )
+            if first_entry is not None and first_entry.chapter == chapter_key:
+                chapter_item.setExpanded(True)
+                self.blockSignals(True)
+                self.setCurrentItem(chapter_item.child(0))
+                self.blockSignals(False)
+                self.scrollToItem(chapter_item.child(0))
+                return
 
     # ------------------------------------------------------------------
     # Private slots

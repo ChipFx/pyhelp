@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Union
 
 from PyQt6.QtCore import QSettings, QSize, Qt, QUrl
-from PyQt6.QtGui import QPainter, QPixmap
+from PyQt6.QtGui import QColor, QPainter, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -97,6 +97,7 @@ class HelpWindow(QDialog):
         self._sizing = HelpSizing()
         self._logo_spec: LogoSizeSpec = self._sizing.logo
         self._on_close_callback: Union[Callable[[dict], None], None] = None
+        self._current_entry: Union[HelpEntry, None] = None
 
         self.setObjectName("HelpWindowRoot")
         self.setWindowTitle(f"{registry.app_name} \u2014 Help")
@@ -107,6 +108,7 @@ class HelpWindow(QDialog):
 
         self._build_ui()
         self._apply_stylesheet()
+        self._update_browser_css()
         self._refresh_logo()
 
         # Populate tree after UI is ready
@@ -298,11 +300,27 @@ class HelpWindow(QDialog):
         except Exception:
             return None
 
-    def _render_entry(self, entry: HelpEntry) -> None:
-        """Render *entry* into the QTextBrowser with injected theme CSS."""
+    def _update_browser_css(self) -> None:
+        """
+        Push the current theme CSS into the browser's default stylesheet and
+        set QPalette link colours so Qt's internal link rendering matches the
+        theme.  Must be called after any theme or font-size change.
+        """
         css = self._theme.content_css()
-        html = f"<style>{css}</style>\n{entry.body_html}"
-        self._browser.setHtml(html)
+        self._browser.document().setDefaultStyleSheet(css)
+
+        palette = self._browser.palette()
+        palette.setColor(QPalette.ColorRole.Link, QColor(self._theme._t("link")))
+        palette.setColor(
+            QPalette.ColorRole.LinkVisited, QColor(self._theme._t("link_visited"))
+        )
+        self._browser.setPalette(palette)
+
+    def _render_entry(self, entry: HelpEntry) -> None:
+        """Render *entry* into the QTextBrowser using the document default stylesheet."""
+        self._current_entry = entry
+        self._update_browser_css()
+        self._browser.setHtml(entry.body_html)
         self._status_bar.showMessage(entry.long_name)
 
     # ------------------------------------------------------------------
@@ -329,14 +347,22 @@ class HelpWindow(QDialog):
         self._show_entry(entry)
 
     def _on_link_clicked(self, url: QUrl) -> None:
-        """Handle ``rst-doc://`` internal links between help topics."""
-        scheme = url.scheme()
-        if scheme == "rst-doc":
-            # Format: rst-doc://chapter/short_name
-            path = url.host() + url.path()  # host = chapter, path = /short_name
-            path = path.lstrip("/")
-            self.navigate_to_path(path)
-        # All other schemes are ignored (no external browser launch)
+        """
+        Handle ``rst-doc://`` internal links between help topics.
+
+        Reconstructs the full path from the URL host and path components, then
+        appends the fragment (``#anchor``) if present so sub-section scrolling
+        is preserved through to :meth:`navigate_to_path`.
+        """
+        if url.scheme() != "rst-doc":
+            return  # ignore external links
+
+        # host = first path segment (chapter), path = remainder
+        path = (url.host() + url.path()).lstrip("/")
+        fragment = url.fragment()
+        if fragment:
+            path = f"{path}#{fragment}"
+        self.navigate_to_path(path)
 
     # ------------------------------------------------------------------
     # Public API
@@ -385,7 +411,10 @@ class HelpWindow(QDialog):
         """
         self._theme = HelpTheme(theme_dict=theme_dict, font_size=self._font_size)
         self._apply_stylesheet()
+        self._update_browser_css()
         self._refresh_logo()
+        if self._current_entry is not None:
+            self._render_entry(self._current_entry)
 
     def set_font_size(self, size: int) -> None:
         """
@@ -397,6 +426,9 @@ class HelpWindow(QDialog):
         self._font_size = size
         self._theme.apply_font_size(size)
         self._apply_stylesheet()
+        self._update_browser_css()
+        if self._current_entry is not None:
+            self._render_entry(self._current_entry)
 
     def navigate_to(self, short_name: str) -> None:
         """
@@ -412,15 +444,87 @@ class HelpWindow(QDialog):
 
     def navigate_to_path(self, path: str) -> None:
         """
-        Jump to a topic by its path string (e.g. ``"view/viewmode"``).
+        Jump to a topic by its path string, with graceful degradation for
+        paths that have more depth than the current registry supports.
+
+        Path format::
+
+            chapter/short_name              # two-segment (standard)
+            chapter/sub/short_name          # three-segment: tries short_name,
+                                            # then sub, then first entry in chapter
+            chapter                         # one-segment: first entry in chapter
+            chapter/short_name#section-id   # with anchor: scrolls to that
+                                            # heading or explicit RST target
+                                            # within the loaded document
+
+        Anchor IDs are generated by docutils from heading text
+        (``"My Section"`` → ``"my-section"``) or from explicit
+        ``.. _target-name:`` directives.
 
         Args:
-            path: Path string such as ``"view/viewmode"``.
+            path: Path string, optionally with a ``#anchor`` fragment.
         """
-        parts = path.split("/", 1)
-        short_name = parts[1] if len(parts) == 2 else parts[0]
-        self.navigate_to(short_name)
-        self._tree.select_path(path)
+        # Split anchor fragment
+        anchor: Union[str, None] = None
+        if "#" in path:
+            path, anchor = path.split("#", 1)
+
+        segments = [s for s in path.split("/") if s]
+        if not segments:
+            return
+
+        navigated = False
+
+        if len(segments) == 1:
+            # Single segment: try as short_name, then as chapter key
+            entry = self._registry.find(segments[0])
+            if entry is not None:
+                self._show_entry(entry)
+                self._tree.select_entry(segments[0])
+                navigated = True
+            else:
+                chapter_entries = self._registry.entries(segments[0])
+                if chapter_entries:
+                    self._show_entry(chapter_entries[0])
+                    self._tree.select_entry(chapter_entries[0].short_name)
+                    navigated = True
+        else:
+            # Multi-segment: try each segment as short_name from most-specific
+            # (last) to least-specific (first), stop on first match.
+            for short_name in reversed(segments):
+                entry = self._registry.find(short_name)
+                if entry is not None:
+                    self._show_entry(entry)
+                    self._tree.select_path(path)
+                    navigated = True
+                    break
+
+            if not navigated:
+                # No segment matched — navigate to the first entry of the
+                # chapter named by the first segment.
+                chapter_entries = self._registry.entries(segments[0])
+                if chapter_entries:
+                    self._show_entry(chapter_entries[0])
+                    self._tree.select_path(path)
+                    navigated = True
+
+        if navigated and anchor:
+            self._scroll_to_anchor(anchor)
+
+    def _scroll_to_anchor(self, anchor: str) -> None:
+        """
+        Scroll the content browser to a named anchor within the current document.
+
+        Deferred by one event-loop iteration to ensure the HTML has been fully
+        rendered before the scroll is attempted.
+
+        Args:
+            anchor: The anchor ID to scroll to.  Docutils generates these from
+                    heading text (``"My Section"`` → ``"my-section"``) and from
+                    explicit ``.. _target-name:`` directives in RST source.
+        """
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, lambda: self._browser.scrollToAnchor(anchor))
 
     # ------------------------------------------------------------------
     # Geometry persistence

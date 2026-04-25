@@ -44,6 +44,8 @@
     "font_size_logo":       15,
     "font_size_small":      11,
 
+    "heading_color":        "#66aaff",
+
     "tree_item_spacing_pct": 10
   }
 }
