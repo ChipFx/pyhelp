@@ -114,7 +114,11 @@ def parse_file(path: Union[Path, str]) -> HelpEntry:
         html_parts = publish_parts(
             body_rst,
             writer="html",
-            settings_overrides={"halt_level": 5, "report_level": 5},
+            settings_overrides={
+                "halt_level": 5,
+                "report_level": 5,
+                "initial_header_level": 2,
+            },
         )
         body_html: str = html_parts["html_body"]
     except Exception as exc:

@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Union
 
 from PyQt6.QtCore import QSettings, QSize, Qt, QUrl
-from PyQt6.QtGui import QPainter, QPixmap
+from PyQt6.QtGui import QColor, QPainter, QPalette, QPixmap
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -97,6 +97,7 @@ class HelpWindow(QDialog):
         self._sizing = HelpSizing()
         self._logo_spec: LogoSizeSpec = self._sizing.logo
         self._on_close_callback: Union[Callable[[dict], None], None] = None
+        self._current_entry: Union[HelpEntry, None] = None
 
         self.setObjectName("HelpWindowRoot")
         self.setWindowTitle(f"{registry.app_name} \u2014 Help")
@@ -107,6 +108,7 @@ class HelpWindow(QDialog):
 
         self._build_ui()
         self._apply_stylesheet()
+        self._update_browser_css()
         self._refresh_logo()
 
         # Populate tree after UI is ready
@@ -298,11 +300,27 @@ class HelpWindow(QDialog):
         except Exception:
             return None
 
-    def _render_entry(self, entry: HelpEntry) -> None:
-        """Render *entry* into the QTextBrowser with injected theme CSS."""
+    def _update_browser_css(self) -> None:
+        """
+        Push the current theme CSS into the browser's default stylesheet and
+        set QPalette link colours so Qt's internal link rendering matches the
+        theme.  Must be called after any theme or font-size change.
+        """
         css = self._theme.content_css()
-        html = f"<style>{css}</style>\n{entry.body_html}"
-        self._browser.setHtml(html)
+        self._browser.document().setDefaultStyleSheet(css)
+
+        palette = self._browser.palette()
+        palette.setColor(QPalette.ColorRole.Link, QColor(self._theme._t("link")))
+        palette.setColor(
+            QPalette.ColorRole.LinkVisited, QColor(self._theme._t("link_visited"))
+        )
+        self._browser.setPalette(palette)
+
+    def _render_entry(self, entry: HelpEntry) -> None:
+        """Render *entry* into the QTextBrowser using the document default stylesheet."""
+        self._current_entry = entry
+        self._update_browser_css()
+        self._browser.setHtml(entry.body_html)
         self._status_bar.showMessage(entry.long_name)
 
     # ------------------------------------------------------------------
@@ -393,7 +411,10 @@ class HelpWindow(QDialog):
         """
         self._theme = HelpTheme(theme_dict=theme_dict, font_size=self._font_size)
         self._apply_stylesheet()
+        self._update_browser_css()
         self._refresh_logo()
+        if self._current_entry is not None:
+            self._render_entry(self._current_entry)
 
     def set_font_size(self, size: int) -> None:
         """
@@ -405,6 +426,9 @@ class HelpWindow(QDialog):
         self._font_size = size
         self._theme.apply_font_size(size)
         self._apply_stylesheet()
+        self._update_browser_css()
+        if self._current_entry is not None:
+            self._render_entry(self._current_entry)
 
     def navigate_to(self, short_name: str) -> None:
         """
